@@ -540,7 +540,7 @@ const S = {
   id: urlId || extractId(store.get("gu51.sid")) || extractId(store.get("gu51.cache_id")),
   report: null, loading: false, error: null, lastUpdated: null,
   tab: decodeURIComponent(location.hash.slice(1)) || "한눈에", prevTab: null,
-  duesFilter: 0, duesQuery: "", expMonth: 0, giftWhich: 0, giftQuery: "",
+  duesFilter: 0, duesQuery: "", expMonth: null, giftWhich: 0, giftQuery: "",
   seq: 0
 };
 
@@ -632,6 +632,11 @@ function render() {
   if (S.prevTab && S.prevTab !== S.tab) cls += list.indexOf(S.tab) > list.indexOf(S.prevTab) ? " in-r" : " in-l";
   S.prevTab = S.tab;
   main.innerHTML = `<div class="${cls}">${body}</div>`;
+  // 선택한 칩이 가로 목록 밖에 숨지 않도록 그 앞 칩부터 보이게 스크롤합니다.
+  main.querySelectorAll(".chips").forEach(c => {
+    const prev = c.querySelector(".chip.on")?.previousElementSibling;
+    c.scrollLeft = prev ? prev.offsetLeft - c.offsetLeft : 0;
+  });
   fitNumbers();
 }
 
@@ -718,9 +723,11 @@ function duesCards(rows) {
 function expensesPage(r) {
   const ops = r.ops;
   if (!ops) return missing("구역 운영비");
-  const months = [...new Set(ops.expenses.map(e => e.month))].sort((a, b) => a - b);
+  // 탭을 열면 이번 달부터 보여 줍니다. 이번 달 지출이 아직 없어도 칩은 보이게 합니다.
+  const now = new Date().getMonth() + 1;
+  const months = [...new Set(ops.expenses.map(e => e.month).concat(now))].sort((a, b) => a - b);
   const opts = [0].concat(months);
-  if (!opts.includes(S.expMonth)) S.expMonth = 0;
+  if (S.expMonth === null || !opts.includes(S.expMonth)) S.expMonth = now;
   const m = S.expMonth;
   const rows = m === 0 ? ops.expenses.slice().sort((a, b) => b.amount - a.amount) : ops.expenses.filter(e => e.month === m);
   const max = Math.max(1, ...rows.map(e => e.amount));
@@ -814,7 +821,9 @@ async function copyText(s) {
 
 $("tabs").addEventListener("click", e => {
   const b = e.target.closest("[data-tab]"); if (!b) return;
-  S.tab = b.dataset.tab; render();
+  S.tab = b.dataset.tab;
+  if (S.tab === "지출") S.expMonth = null; // 지출 탭은 누를 때마다 이번 달로
+  render();
   history.replaceState(null, "", "#" + encodeURIComponent(S.tab));
   b.scrollIntoView({ inline: "nearest", block: "nearest" });
   window.scrollTo(0, 0);
